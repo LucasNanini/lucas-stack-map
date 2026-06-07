@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lucas — Personal Stack Map</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f8f8f6; overflow: hidden; display: flex; }
+  #map-area { flex: 1; position: relative; height: 100vh; overflow: hidden; }
+  #canvas { width: 100%; height: 100%; display: block; }
+
+  .node rect {
+    rx: 6; ry: 6;
+    stroke-width: 1.5;
+    cursor: pointer;
+    transition: opacity 0.2s;
+  }
+  .node text {
+    font-size: 11px;
+    font-weight: 600;
+    pointer-events: none;
+    fill: #fff;
+  }
+  .node .subtext {
+    font-size: 9px;
+    font-weight: 400;
+    fill: rgba(255,255,255,0.75);
+  }
+  .node.dimmed { opacity: 0.15; }
+  .node.highlighted rect { stroke: #fff; stroke-width: 2.5; }
+
+  .link {
+    fill: none;
+    stroke: #ccc;
+    stroke-width: 1.5;
+    opacity: 0.6;
+  }
+  .link.highlighted { stroke: #444; opacity: 1; stroke-width: 2; }
+  .link.dimmed { opacity: 0.05; }
+
+  .layer-label {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    fill: #aaa;
+  }
+
+  #tooltip {
+    position: fixed;
+    background: #1a1a18;
+    color: #e8e6e0;
+    padding: 10px 13px;
+    border-radius: 8px;
+    font-size: 12px;
+    max-width: 240px;
+    pointer-events: none;
+    display: none;
+    line-height: 1.6;
+    z-index: 10;
+  }
+  #tooltip strong { display: block; font-size: 13px; margin-bottom: 4px; }
+  #tooltip .t-type { color: #888; font-size: 11px; margin-bottom: 6px; }
+  #tooltip .t-items { color: #b4b2a9; font-size: 11px; }
+  #tooltip .t-items li { margin-bottom: 1px; }
+
+  #legend {
+    position: fixed;
+    bottom: 20px;
+    left: 20px;
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    background: rgba(255,255,255,0.9);
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid rgba(0,0,0,0.1);
+    font-size: 11px;
+    color: #555;
+  }
+  .legend-item { display: flex; align-items: center; gap: 5px; cursor: pointer; }
+  .legend-dot { width: 10px; height: 10px; border-radius: 3px; }
+
+  #hint {
+    position: fixed;
+    top: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 11px;
+    color: #aaa;
+    background: rgba(255,255,255,0.85);
+    padding: 5px 12px;
+    border-radius: 20px;
+    border: 1px solid rgba(0,0,0,0.08);
+  }
+
+  #panel {
+    width: 300px;
+    min-width: 300px;
+    height: 100vh;
+    background: #fff;
+    border-left: 1px solid rgba(0,0,0,0.10);
+    padding: 20px 18px;
+    overflow-y: auto;
+    font-size: 13px;
+    color: #1a1a18;
+    display: flex;
+    flex-direction: column;
+  }
+  #panel-empty {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    color: #bbb;
+    font-size: 12px;
+    line-height: 1.6;
+  }
+  #panel-content { display: none; }
+  #panel.has-content #panel-empty { display: none; }
+  #panel.has-content #panel-content { display: block; }
+  #panel-close {
+    position: absolute; top: 12px; right: 14px;
+    background: none; border: none; font-size: 18px;
+    color: #ccc; cursor: pointer; line-height: 1;
+  }
+  #panel-close:hover { color: #888; }
+  #panel h2 { font-size: 18px; margin-bottom: 2px; }
+  #panel .p-type { font-size: 12px; color: #888; margin-bottom: 14px; }
+  #panel .p-detail { font-size: 12px; color: #666; background: #f5f5f3; padding: 8px 10px; border-radius: 6px; margin-bottom: 16px; }
+  #panel .p-section { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #aaa; margin: 16px 0 7px; }
+  #panel ul { list-style: none; }
+  #panel li { margin-bottom: 5px; line-height: 1.5; }
+  #panel a { color: #185fa5; text-decoration: none; }
+  #panel a:hover { text-decoration: underline; }
+  #panel .p-open-note {
+    display: inline-block; margin-bottom: 4px; padding: 7px 12px;
+    background: #185fa5; color: #fff; border-radius: 6px; font-size: 12px; font-weight: 500;
+  }
+  #panel .p-open-note:hover { background: #134a82; text-decoration: none; }
+  #panel .p-conn { display: inline-block; padding: 2px 8px; margin: 0 4px 4px 0; background: #f0f0ee; border-radius: 10px; font-size: 11px; }
+  #panel .p-doclist li.p-doc { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 0; border-bottom: 1px solid rgba(0,0,0,0.06); }
+  #panel .p-doc-label { font-size: 12px; flex: 1; }
+  #panel .p-doc-btns { display: flex; gap: 5px; flex-shrink: 0; }
+  #panel .p-doc-btn { font-size: 11px; padding: 3px 8px; border-radius: 5px; background: #185fa5; color: #fff; white-space: nowrap; }
+  #panel .p-doc-btn:hover { background: #134a82; text-decoration: none; }
+  #panel .p-doc-btn.p-obs { background: #6e57c4; }
+  #panel .p-doc-btn.p-obs:hover { background: #5a45a8; }
+  @media (prefers-color-scheme: dark) {
+    #panel { background: #222220; color: #e8e6e0; border-left-color: rgba(255,255,255,0.12); }
+    #panel .p-detail { background: #2c2c2a; color: #b4b2a9; }
+    #panel a { color: #85b7eb; }
+    #panel .p-conn { background: #333331; }
+  }
+</style>
+</head>
+<body>
+<div id="map-area">
+  <svg id="canvas"></svg>
+  <div id="tooltip"></div>
+  <div id="legend"></div>
+  <div id="hint">Click a node to open its panel · Scroll to zoom · Drag to pan</div>
+</div>
+<div id="panel">
+  <div id="panel-empty">Click any node<br>to see its details</div>
+  <div id="panel-content">
+    <button id="panel-close">&times;</button>
+    <div id="panel-body"></div>
+  </div>
+</div>
+
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/elkjs@0.9.3/lib/elk.bundled.js"></script>
+<script id="stack-data">/*STACK_DATA_START*/window.STACK_DATA={"layers": [{"id": "inputs", "label": "Inputs", "color": "#4bb896", "role": "Raw signals entering the stack"}, {"id": "orchestration", "label": "Orchestration", "color": "#6e67cc", "role": "Automation and routing"}, {"id": "intelligence", "label": "Intelligence", "color": "#d4891e", "role": "AI and processing"}, {"id": "storage", "label": "Storage", "color": "#2e7bc4", "role": "Data, documents, knowledge"}, {"id": "outputs", "label": "Outputs", "color": "#c44e2a", "role": "Actionable surfaces"}, {"id": "projects", "label": "Projects", "color": "#777770", "role": "Active domains"}], "nodes": [{"id": "gmail_perso", "name": "Gmail (personal)", "type": "lucas.nanini@gmail.com", "layer": "inputs", "items": ["Personal signals", "Harmattan supplier comms", "CoS source", "Email scoring pipeline"]}, {"id": "elc_email", "name": "Outlook (ELC)", "type": "lnanini@estee.com · Microsoft 365", "layer": "inputs", "items": ["L'Atelier ELC comms", "ELC internal", "Professional signals"]}, {"id": "whatsapp", "name": "WhatsApp", "type": "Messaging · capture", "layer": "inputs", "items": ["Voice notes", "Links & ideas", "CoS output channel", "PKM input (planned)"]}, {"id": "gcal", "name": "Google Calendar", "type": "Calendar · Google", "layer": "inputs", "items": ["CoS source", "Meeting context for brief"]}, {"id": "screenshots", "name": "Screenshots", "type": "Visual capture · mobile", "layer": "inputs", "badge": "planned", "items": ["Ideas from social/web", "Claude Vision processing (planned)"]}, {"id": "make", "name": "Make.com", "type": "Automation · no-code", "layer": "orchestration", "detail": "Credential: 1Password", "items": ["CoS pipeline", "Gmail scoring", "WhatsApp delivery", "Innovation briefing"], "docs": [{"label": "Make.com dashboard", "url": "https://www.make.com"}]}, {"id": "twilio", "name": "Twilio", "type": "Messaging API", "layer": "orchestration", "detail": "Credential: 1Password", "items": ["WhatsApp bridge", "Brief delivery"]}, {"id": "railway", "name": "Railway", "type": "App backend · hosting", "layer": "orchestration", "detail": "Credential: 1Password", "items": ["CoS FastAPI backend", "Postgres + API", "Live at railway.app"], "docs": [{"label": "Railway dashboard", "url": "https://railway.app"}]}, {"id": "claude_api", "name": "Claude API", "type": "LLM · Anthropic", "layer": "intelligence", "detail": "~$5–15/mo · Credential: 1Password", "items": ["CoS enrichment", "Innovation briefing", "Contact graph enrichment", "Chinese reading tool"]}, {"id": "whisper", "name": "Whisper", "type": "Transcription · OpenAI", "layer": "intelligence", "badge": "planned", "detail": "~$0.006/min · Credential: 1Password", "items": ["WhatsApp voice transcription (planned)"]}, {"id": "brave", "name": "Brave Search", "type": "Search API", "layer": "intelligence", "detail": "Credential: 1Password", "items": ["Innovation briefing", "Daily signal sourcing"]}, {"id": "mac", "name": "Mac (local)", "type": "Local machine", "layer": "storage", "items": ["Obsidian vault", "Claude Code", "Local scripts", "Downloads & captures"]}, {"id": "obsidian", "name": "Obsidian", "type": "PKM · local-first", "layer": "storage", "badge": "setting up", "items": ["00-Inbox", "01-People", "02-Ideas", "03-Work", "04-Life", "05-Log"]}, {"id": "gdrive", "name": "Google Drive", "type": "Document store · Google", "layer": "storage", "items": ["Harmattan CRM & catalogues", "AËDO Lydia model", "Noleo white papers", "Lucas Admin", "LULU INVEST"], "docs": [{"label": "Harmattan CRM", "url": "https://drive.google.com/drive/search?q=harmattan_crm_roasters"}, {"label": "Belco / Fève catalogues", "url": "https://drive.google.com/drive/search?q=belco_catalogue"}, {"label": "AËDO Lydia model", "url": "https://drive.google.com/drive/search?q=AEDO_Lydia_Temps_Semaine"}, {"label": "Noleo white papers", "url": "https://drive.google.com/drive/search?q=Noleo"}, {"label": "LULU INVEST", "url": "https://drive.google.com/drive/search?q=LULU%20INVEST"}]}, {"id": "supabase", "name": "Supabase", "type": "Database · Postgres", "layer": "storage", "detail": "Credential: 1Password", "items": ["Contact graph ~5k nodes", "CoS memory", "Email scoring history"], "docs": [{"label": "Supabase dashboard", "url": "https://supabase.com/dashboard"}]}, {"id": "gsheets", "name": "Google Sheets", "type": "Spreadsheet · Google", "layer": "storage", "items": ["Innovation dedup", "Competitor intel (Tanat, Fève, Belco)", "AULLYN LAUNCH PAD"], "docs": [{"label": "Competitor intel sheet", "url": "https://drive.google.com/drive/search?q=Competitor%20intel"}, {"label": "AULLYN LAUNCH PAD", "url": "https://drive.google.com/drive/search?q=AULLYN%20LAUNCH%20PAD"}]}, {"id": "upstash", "name": "Upstash Redis", "type": "Cache · serverless", "layer": "storage", "detail": "Credential: 1Password", "items": ["Boussole app state"]}, {"id": "cos_brief", "name": "CoS Brief", "type": "Daily WhatsApp brief", "layer": "outputs", "items": ["Calendar digest", "Email scoring", "News signals", "3× daily via WhatsApp"]}, {"id": "contact_graph", "name": "Contact Graph", "type": "Network viz · web app", "layer": "outputs", "items": ["~5k contacts", "Force-directed graph", "pgvector + OpenAI embeddings", "Telegram bot capture", "node-cron daily flow", "~/personal-crm repo"], "docs": [{"label": "personal-crm repo", "url": "file:///Users/lnanini/personal-crm"}]}, {"id": "innov_brief", "name": "Innovation Brief", "type": "Make.com pipeline", "layer": "outputs", "items": ["Brave signals", "Claude enrichment", "Sheets dedup", "WhatsApp digest"]}, {"id": "vercel", "name": "Vercel", "type": "App hosting", "layer": "outputs", "detail": "Credential: 1Password", "items": ["Boussole (boussole.vote)", "TokenPilot", "Chinese Reader", "Paris Terrasse"], "docs": [{"label": "Vercel dashboard", "url": "https://vercel.com/dashboard"}]}, {"id": "cos_app", "name": "Chief of Staff", "type": "Personal AI dashboard", "layer": "projects", "items": ["FastAPI on Railway", "Claude API + Make.com", "Brief 3× daily", "1-click actions"], "docs": [{"label": "CoS live app", "url": "https://chief-of-staff-production-abe6.up.railway.app"}, {"label": "cos-backend repo", "url": "file:///Users/lnanini/Downloads/cos-backend"}]}, {"id": "chinese_tool", "name": "Chinese Reader", "type": "Reading tool · web app", "layer": "projects", "items": ["Next.js + Tailwind", "Claude API", "pinyin-pro", "Character lookup & translation", "~/shizi repo"], "docs": [{"label": "shizi repo", "url": "file:///Users/lnanini/shizi"}]}, {"id": "boussole", "name": "Boussole", "type": "Voting app · web", "layer": "projects", "items": ["boussole.vote", "Hosted on Vercel", "Upstash for state"], "docs": [{"label": "boussole.vote (live)", "url": "https://boussole.vote"}, {"label": "boussole repo", "url": "file:///Users/lnanini/Downloads/boussole"}]}, {"id": "harmattan", "name": "Harmattan Coffee", "type": "Green coffee import", "layer": "projects", "items": ["Co-founders: Devan Ahmed, Collins Njiakin", "Boyo region, Cameroon", "Lots: Classic / Signature / Reserve"], "docs": [{"label": "harmattan-coffee repo", "url": "file:///Users/lnanini/harmattan-coffee"}, {"label": "Roasters CRM (Drive)", "url": "https://drive.google.com/drive/search?q=harmattan_crm_roasters"}, {"label": "Competitor catalogues (Drive)", "url": "https://drive.google.com/drive/search?q=belco_catalogue"}]}, {"id": "latelierelc", "name": "L'Atelier ELC", "type": "Innovation & strategy", "layer": "projects", "items": ["Fragrance innovation", "Brand intelligence (OpenAI agents)", "Supabase data lake", "~/fragrance-intel-workspace repo"], "docs": [{"label": "fragrance-intel repo", "url": "file:///Users/lnanini/fragrance-intel-workspace"}, {"label": "Data lake inventory (Drive)", "url": "https://drive.google.com/drive/search?q=data%20lake"}]}, {"id": "aedo", "name": "AËDO", "type": "Men's skincare brand", "layer": "projects", "items": ["Lydia workload model", "Jawad consultant proposal", "Product development"], "docs": [{"label": "Lydia workload model (Drive)", "url": "https://drive.google.com/drive/search?q=AEDO_Lydia_Temps_Semaine"}, {"label": "Jawad proposal (Drive)", "url": "https://drive.google.com/drive/search?q=Jawad"}]}, {"id": "noleo", "name": "NOLEO", "type": "Clinical skincare", "layer": "projects", "items": ["White paper (6 versions)", "Signed PO and invoices in Drive"], "docs": [{"label": "White paper (Drive)", "url": "https://drive.google.com/drive/search?q=Noleo%20white%20paper"}, {"label": "PO & invoices (Drive)", "url": "https://drive.google.com/drive/search?q=Noleo%20invoice"}]}, {"id": "telegram", "name": "Telegram", "type": "Messaging · capture", "layer": "inputs", "items": ["personal-crm bot", "Contact capture", "Review loop"]}, {"id": "openai", "name": "OpenAI", "type": "LLM & embeddings · OpenAI", "layer": "intelligence", "detail": "Credential: 1Password", "items": ["Embeddings (contact graph)", "Agents (fragrance intel)", "Whisper transcription"]}, {"id": "gemini", "name": "Google Gemini", "type": "LLM · Google", "layer": "intelligence", "items": ["Multi-LLM routing (TokenPilot)"]}, {"id": "tokenpilot", "name": "TokenPilot", "type": "Multi-LLM router · web app", "layer": "projects", "items": ["Claude + OpenAI + Gemini", "Supabase auth/state", "Next.js on Vercel", "~/tokenpilot repo"], "docs": [{"label": "tokenpilot repo", "url": "file:///Users/lnanini/tokenpilot"}]}, {"id": "paris_sun", "name": "Paris Terrasse", "type": "Sun-finder · web app", "layer": "projects", "items": ["React + Three.js", "Leaflet map + suncalc", "Finds sunny terraces", "~/paris-terrasse-app repo"], "docs": [{"label": "paris-terrasse-app repo", "url": "file:///Users/lnanini/paris-terrasse-app"}]}], "edges": [{"source": "gmail_perso", "target": "make"}, {"source": "gmail_perso", "target": "claude_api"}, {"source": "elc_email", "target": "make"}, {"source": "whatsapp", "target": "twilio"}, {"source": "whatsapp", "target": "whisper"}, {"source": "whatsapp", "target": "make"}, {"source": "gcal", "target": "make"}, {"source": "screenshots", "target": "claude_api"}, {"source": "make", "target": "claude_api"}, {"source": "make", "target": "twilio"}, {"source": "make", "target": "brave"}, {"source": "make", "target": "gsheets"}, {"source": "make", "target": "cos_brief"}, {"source": "make", "target": "innov_brief"}, {"source": "twilio", "target": "cos_brief"}, {"source": "railway", "target": "supabase"}, {"source": "railway", "target": "claude_api"}, {"source": "railway", "target": "cos_brief"}, {"source": "claude_api", "target": "supabase"}, {"source": "claude_api", "target": "cos_brief"}, {"source": "claude_api", "target": "contact_graph"}, {"source": "claude_api", "target": "innov_brief"}, {"source": "brave", "target": "gsheets"}, {"source": "brave", "target": "innov_brief"}, {"source": "mac", "target": "obsidian"}, {"source": "mac", "target": "gdrive"}, {"source": "obsidian", "target": "gdrive"}, {"source": "gdrive", "target": "gsheets"}, {"source": "supabase", "target": "contact_graph"}, {"source": "gsheets", "target": "innov_brief"}, {"source": "upstash", "target": "vercel"}, {"source": "cos_app", "target": "railway"}, {"source": "cos_app", "target": "claude_api"}, {"source": "cos_app", "target": "make"}, {"source": "cos_app", "target": "supabase"}, {"source": "chinese_tool", "target": "claude_api"}, {"source": "chinese_tool", "target": "mac"}, {"source": "boussole", "target": "vercel"}, {"source": "boussole", "target": "upstash"}, {"source": "harmattan", "target": "gdrive"}, {"source": "harmattan", "target": "gsheets"}, {"source": "harmattan", "target": "gmail_perso"}, {"source": "latelierelc", "target": "elc_email"}, {"source": "latelierelc", "target": "gdrive"}, {"source": "aedo", "target": "gdrive"}, {"source": "noleo", "target": "gdrive"}, {"source": "openai", "target": "contact_graph"}, {"source": "telegram", "target": "contact_graph"}, {"source": "latelierelc", "target": "openai"}, {"source": "latelierelc", "target": "supabase"}, {"source": "tokenpilot", "target": "claude_api"}, {"source": "tokenpilot", "target": "openai"}, {"source": "tokenpilot", "target": "gemini"}, {"source": "tokenpilot", "target": "supabase"}, {"source": "tokenpilot", "target": "vercel"}, {"source": "paris_sun", "target": "vercel"}, {"source": "chinese_tool", "target": "vercel"}]};/*STACK_DATA_END*/</script>
+<script>
+const NODE_W = 150;
+const NODE_H = 44;
+
+// Data is embedded below (injected from stack.json by build.py) so the file
+// works when opened directly via file://. Falls back to fetch if not embedded.
+if (window.STACK_DATA) {
+  const { layers, nodes, edges } = window.STACK_DATA;
+  render(layers, nodes, edges);
+} else {
+  fetch("stack.json").then(r => r.json())
+    .then(({ layers, nodes, edges }) => render(layers, nodes, edges))
+    .catch(e => document.body.innerHTML = `<p style="padding:2rem;font-family:sans-serif;color:red">Could not load stack.json: ${e}</p>`);
+}
+
+async function render(LAYERS, NODES, EDGES) {
+  const LAYER_COLOR = Object.fromEntries(LAYERS.map(l => [l.id, l.color]));
+  const LAYER_ORDER = LAYERS.map(l => l.id);
+  const nodeById = Object.fromEntries(NODES.map(n => [n.id, n]));
+
+  // Drop any edges that reference unknown nodes (keeps ELK from throwing)
+  const allEdges = EDGES.filter(e => nodeById[e.source] && nodeById[e.target]);
+  // Split: cross-layer edges go to ELK; same-layer edges are routed manually
+  // (same-layer edges would otherwise force ELK to split a column into sub-columns).
+  const edges      = allEdges.filter(e => nodeById[e.source].layer !== nodeById[e.target].layer);
+  const sameLayer  = allEdges.filter(e => nodeById[e.source].layer === nodeById[e.target].layer);
+
+  // --- ELK layered layout with partitioning: one column per layer ---
+  const elk = new ELK();
+  const elkGraph = {
+    id: "root",
+    layoutOptions: {
+      "elk.algorithm": "layered",
+      "elk.direction": "RIGHT",
+      "elk.edgeRouting": "ORTHOGONAL",
+      "elk.partitioning.activate": "true",
+      "elk.separateConnectedComponents": "false",
+      "elk.layered.spacing.nodeNodeBetweenLayers": "130",
+      "elk.spacing.nodeNode": "30",
+      "elk.spacing.edgeEdge": "10",
+      "elk.spacing.edgeNode": "14",
+      "elk.layered.spacing.edgeEdgeBetweenLayers": "10",
+      "elk.layered.spacing.edgeNodeBetweenLayers": "14",
+      "elk.layered.crossingMinimization.semiInteractive": "true"
+    },
+    children: NODES.map(n => ({
+      id: n.id, width: NODE_W, height: NODE_H,
+      layoutOptions: { "elk.partitioning.partition": String(LAYER_ORDER.indexOf(n.layer)) }
+    })),
+    edges: edges.map((e, i) => ({ id: "e" + i, sources: [e.source], targets: [e.target] }))
+  };
+
+  const laid = await elk.layout(elkGraph);
+
+  // Map ELK results back onto our nodes
+  laid.children.forEach(c => {
+    const n = nodeById[c.id];
+    n.x = c.x; n.y = c.y;
+  });
+
+  const mapArea = document.getElementById("map-area");
+  const W = mapArea.clientWidth || window.innerWidth - 300;
+  const H = window.innerHeight;
+  const svg = d3.select("#canvas").attr("width", W).attr("height", H);
+  const g = svg.append("g");
+  const zoom = d3.zoom().scaleExtent([0.15, 2.5]).on("zoom", e => g.attr("transform", e.transform));
+  svg.call(zoom);
+
+  // --- Layer column labels (computed from laid-out node positions) ---
+  const colX = {};
+  NODES.forEach(n => {
+    if (colX[n.layer] === undefined) colX[n.layer] = n.x;
+    else colX[n.layer] = Math.min(colX[n.layer], n.x);
+  });
+  const topY = Math.min(...NODES.map(n => n.y)) - 34;
+  const botY = Math.max(...NODES.map(n => n.y + NODE_H)) + 20;
+  LAYER_ORDER.forEach(lid => {
+    const layer = LAYERS.find(l => l.id === lid);
+    const x = colX[lid] + NODE_W / 2;
+    g.append("text").attr("class", "layer-label")
+      .attr("x", x).attr("y", topY).attr("text-anchor", "middle")
+      .attr("fill", layer.color).text(layer.label);
+  });
+
+  // --- Edges from ELK orthogonal sections ---
+  const edgePath = ledge => {
+    const sec = ledge.sections && ledge.sections[0];
+    if (!sec) return "";
+    const pts = [sec.startPoint, ...(sec.bendPoints || []), sec.endPoint];
+    return pts.map((p, i) => `${i ? "L" : "M"}${p.x},${p.y}`).join(" ");
+  };
+
+  const link = g.selectAll(".link")
+    .data(laid.edges).enter()
+    .append("path")
+    .attr("class", "link")
+    .attr("d", edgePath)
+    .each(function (d, i) { d._src = edges[i].source; d._tgt = edges[i].target; });
+
+  // Same-layer edges: route as a clean bracket on the LEFT side of the column.
+  // Each gets its own lane so they don't overlap.
+  const slLink = g.selectAll(".sl-link")
+    .data(sameLayer).enter()
+    .append("path")
+    .attr("class", "link")
+    .attr("d", (e, i) => {
+      const s = nodeById[e.source], t = nodeById[e.target];
+      const sy = s.y + NODE_H / 2, ty = t.y + NODE_H / 2;
+      const lane = s.x - 14 - (i % 4) * 7;   // stagger lanes to the left of the column
+      const sx = s.x, tx = t.x;
+      return `M${sx},${sy} L${lane},${sy} L${lane},${ty} L${tx},${ty}`;
+    })
+    .each(function (e) { e._src = e.source; e._tgt = e.target; });
+
+  // --- Nodes ---
+  const tooltip = document.getElementById("tooltip");
+  const node = g.selectAll(".node")
+    .data(NODES).enter()
+    .append("g").attr("class", "node")
+    .attr("transform", d => `translate(${d.x},${d.y})`);
+
+  node.append("rect")
+    .attr("width", NODE_W).attr("height", NODE_H)
+    .attr("fill", d => LAYER_COLOR[d.layer])
+    .attr("stroke", d => d3.color(LAYER_COLOR[d.layer]).darker(0.5));
+
+  node.append("text")
+    .attr("x", NODE_W / 2).attr("y", 18).attr("text-anchor", "middle")
+    .text(d => d.name);
+  node.append("text").attr("class", "subtext")
+    .attr("x", NODE_W / 2).attr("y", 32).attr("text-anchor", "middle")
+    .text(d => d.type);
+
+  // --- Interaction ---
+  const connectedIds = id => {
+    const ids = new Set();
+    allEdges.forEach(e => {
+      if (e.source === id) ids.add(e.target);
+      if (e.target === id) ids.add(e.source);
+    });
+    return ids;
+  };
+  // --- Detail panel ---
+  const VAULT = "lucas-vault";
+  const NOTE_DIR = "03-Work/Stack";
+  const panel = document.getElementById("panel");
+  const panelBody = document.getElementById("panel-body");
+  const panelContent = document.getElementById("panel-content");
+  const obsidianURI = name =>
+    `obsidian://open?vault=${encodeURIComponent(VAULT)}&file=${encodeURIComponent(NOTE_DIR + "/" + name)}`;
+
+  function openPanel(d) {
+    const conn = [...connectedIds(d.id)].map(id => nodeById[id]).filter(Boolean);
+    // Contents: plain descriptive bullets
+    const contents = (d.items || [])
+      .map(i => `<li>${typeof i === "string" ? i : i.label}</li>`).join("");
+    // Documents: each row has up to two buttons — Open (doc) and Obsidian
+    const docRow = doc => {
+      const openBtn = doc.url
+        ? `<a class="p-doc-btn" href="${doc.url}" target="_blank">Open ↗</a>` : "";
+      const obsBtn = `<a class="p-doc-btn p-obs" href="${obsidianURI((doc.obsidian || d.name) + ".md")}">Obsidian</a>`;
+      return `<li class="p-doc"><span class="p-doc-label">${doc.label}</span><span class="p-doc-btns">${openBtn}${obsBtn}</span></li>`;
+    };
+    const docs = (d.docs || []).map(docRow).join("");
+    panelBody.innerHTML = `
+      <h2>${d.name}</h2>
+      <div class="p-type">${d.type}</div>
+      ${d.detail ? `<div class="p-detail">${d.detail}</div>` : ""}
+      <a class="p-open-note" href="${obsidianURI(d.name + ".md")}">Open note in Obsidian →</a>
+      ${docs ? `<div class="p-section">Documents</div><ul class="p-doclist">${docs}</ul>` : ""}
+      <div class="p-section">Contents</div>
+      <ul>${contents}</ul>
+      <div class="p-section">Connected to</div>
+      <div>${conn.map(c => `<span class="p-conn">${c.name}</span>`).join("")}</div>
+    `;
+    panel.classList.add("has-content");
+  }
+  document.getElementById("panel-close").onclick = e => { e.stopPropagation(); panel.classList.remove("has-content"); clear(); };
+
+  let active = null;
+  const clear = () => {
+    active = null;
+    node.classed("dimmed", false).classed("highlighted", false);
+    link.classed("highlighted", false).classed("dimmed", false);
+    slLink.classed("highlighted", false).classed("dimmed", false);
+    panel.classList.remove("has-content");
+  };
+  node.on("click", (event, d) => {
+    event.stopPropagation();
+    if (active === d.id) return clear();
+    active = d.id;
+    const conn = connectedIds(d.id);
+    node.classed("dimmed", n => n.id !== d.id && !conn.has(n.id));
+    node.classed("highlighted", n => conn.has(n.id) || n.id === d.id);
+    link.classed("highlighted", e => e._src === d.id || e._tgt === d.id);
+    link.classed("dimmed", e => e._src !== d.id && e._tgt !== d.id);
+    slLink.classed("highlighted", e => e._src === d.id || e._tgt === d.id);
+    slLink.classed("dimmed", e => e._src !== d.id && e._tgt !== d.id);
+    openPanel(d);
+  })
+  .on("mouseover", (event, d) => {
+    tooltip.style.display = "block";
+    tooltip.innerHTML = `<strong>${d.name}</strong><div class="t-type">${d.type}</div><ul class="t-items">${d.items.map(i => `<li>${i}</li>`).join("")}</ul>`;
+  })
+  .on("mousemove", event => {
+    tooltip.style.left = (event.clientX + 14) + "px";
+    tooltip.style.top = (event.clientY - 10) + "px";
+  })
+  .on("mouseout", () => { tooltip.style.display = "none"; });
+  svg.on("click", clear);
+
+  // --- Zoom to fit ---
+  const minX = Math.min(...NODES.map(n => n.x)) - 20;
+  const maxX = Math.max(...NODES.map(n => n.x + NODE_W)) + 20;
+  const minY = topY - 10, maxY = botY;
+  const bW = maxX - minX, bH = maxY - minY;
+  const fitScale = Math.min(W / bW, (H - 80) / bH) * 0.94;
+  const tx = (W - bW * fitScale) / 2 - minX * fitScale;
+  const ty = (H - bH * fitScale) / 2 - minY * fitScale;
+  svg.call(zoom.transform, d3.zoomIdentity.translate(tx, ty).scale(fitScale));
+
+  // --- Legend ---
+  const legend = document.getElementById("legend");
+  LAYERS.forEach(l => {
+    const item = document.createElement("div");
+    item.className = "legend-item";
+    item.innerHTML = `<div class="legend-dot" style="background:${l.color}"></div>${l.label}`;
+    legend.appendChild(item);
+  });
+}
+</script>
+</body>
+</html>
