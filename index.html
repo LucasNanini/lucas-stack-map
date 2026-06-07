@@ -298,23 +298,9 @@ async function render(LAYERS, NODES, EDGES) {
     })
     .each(function (e) { e._src = e.source; e._tgt = e.target; });
 
-  // Back-edges (projects→tools): rendered as dashed curved arcs above the diagram.
-  // Use a cubic bezier that loops above the top of the graph.
-  const beLink = g.selectAll(".be-link")
-    .data(backEdges).enter()
-    .append("path")
-    .attr("class", "link")
-    .style("stroke", "#aaa")
-    .style("stroke-dasharray", "4,3")
-    .style("opacity", 0.5)
-    .attr("d", e => {
-      const s = nodeById[e.source], t = nodeById[e.target];
-      const sx = s.x + NODE_W / 2, sy = s.y;
-      const tx = t.x + NODE_W / 2, ty = t.y;
-      const cy = Math.min(sy, ty) - 60; // arc above both nodes
-      return `M${sx},${sy} C${sx},${cy} ${tx},${cy} ${tx},${ty}`;
-    })
-    .each(function(e) { e._src = e.source; e._tgt = e.target; });
+  // Back-edges (projects→tools) are NOT drawn — too noisy.
+  // They are used only for highlight logic (connectedIds includes allEdges).
+  const beLink = { classed: () => {} }; // no-op so clear() doesn't break
 
   // --- Nodes ---
   const tooltip = document.getElementById("tooltip");
