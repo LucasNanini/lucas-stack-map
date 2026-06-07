@@ -196,10 +196,20 @@ async function render(LAYERS, NODES, EDGES) {
 
   // Drop any edges that reference unknown nodes (keeps ELK from throwing)
   const allEdges = EDGES.filter(e => nodeById[e.source] && nodeById[e.target]);
-  // Split: cross-layer edges go to ELK; same-layer edges are routed manually
-  // (same-layer edges would otherwise force ELK to split a column into sub-columns).
-  const edges      = allEdges.filter(e => nodeById[e.source].layer !== nodeById[e.target].layer);
-  const sameLayer  = allEdges.filter(e => nodeById[e.source].layer === nodeById[e.target].layer);
+  // Split into three groups:
+  // 1. forward cross-layer edges → ELK (left-to-right flow)
+  // 2. same-layer edges → manual bracket routing
+  // 3. backward edges (projects→tools, right-to-left) → manual curved arcs
+  const LAYER_IDX = Object.fromEntries(LAYER_ORDER.map((l,i) => [l,i]));
+  const edges     = allEdges.filter(e => {
+    const si = LAYER_IDX[nodeById[e.source].layer], ti = LAYER_IDX[nodeById[e.target].layer];
+    return si !== ti && si < ti; // forward only
+  });
+  const sameLayer = allEdges.filter(e => nodeById[e.source].layer === nodeById[e.target].layer);
+  const backEdges = allEdges.filter(e => {
+    const si = LAYER_IDX[nodeById[e.source].layer], ti = LAYER_IDX[nodeById[e.target].layer];
+    return si > ti; // right-to-left (projects→tools)
+  });
 
   // --- ELK layered layout with partitioning: one column per layer ---
   const elk = new ELK();
@@ -288,6 +298,24 @@ async function render(LAYERS, NODES, EDGES) {
     })
     .each(function (e) { e._src = e.source; e._tgt = e.target; });
 
+  // Back-edges (projects→tools): rendered as dashed curved arcs above the diagram.
+  // Use a cubic bezier that loops above the top of the graph.
+  const beLink = g.selectAll(".be-link")
+    .data(backEdges).enter()
+    .append("path")
+    .attr("class", "link")
+    .style("stroke", "#aaa")
+    .style("stroke-dasharray", "4,3")
+    .style("opacity", 0.5)
+    .attr("d", e => {
+      const s = nodeById[e.source], t = nodeById[e.target];
+      const sx = s.x + NODE_W / 2, sy = s.y;
+      const tx = t.x + NODE_W / 2, ty = t.y;
+      const cy = Math.min(sy, ty) - 60; // arc above both nodes
+      return `M${sx},${sy} C${sx},${cy} ${tx},${cy} ${tx},${ty}`;
+    })
+    .each(function(e) { e._src = e.source; e._tgt = e.target; });
+
   // --- Nodes ---
   const tooltip = document.getElementById("tooltip");
   const node = g.selectAll(".node")
@@ -359,6 +387,7 @@ async function render(LAYERS, NODES, EDGES) {
     node.classed("dimmed", false).classed("highlighted", false);
     link.classed("highlighted", false).classed("dimmed", false);
     slLink.classed("highlighted", false).classed("dimmed", false);
+    beLink.classed("highlighted", false).classed("dimmed", false);
     panel.classList.remove("has-content");
   };
   node.on("click", (event, d) => {
@@ -372,6 +401,8 @@ async function render(LAYERS, NODES, EDGES) {
     link.classed("dimmed", e => e._src !== d.id && e._tgt !== d.id);
     slLink.classed("highlighted", e => e._src === d.id || e._tgt === d.id);
     slLink.classed("dimmed", e => e._src !== d.id && e._tgt !== d.id);
+    beLink.classed("highlighted", e => e._src === d.id || e._tgt === d.id);
+    beLink.classed("dimmed", e => e._src !== d.id && e._tgt !== d.id);
     openPanel(d);
   })
   .on("mouseover", (event, d) => {
