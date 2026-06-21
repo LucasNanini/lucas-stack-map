@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Lucas — Command Center</title>
+
+<script src="/api/media?path=%2Fdata%2Fworkspace%2Fd3.min.js"></script>
+<script src="/api/media?path=%2Fdata%2Fworkspace%2Felk.js"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #080c14; --surface: #0f1623; --surface2: #161e2e;
+  --border: #1e2d45; --border2: #253550;
+  --text: #e2e8f0; --muted: #64748b;
+  --cyan: #22d3ee; --emerald: #34d399; --violet: #a78bfa;
+  --amber: #fbbf24; --rose: #fb7185; --blue: #60a5fa;
+}
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+@keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.6;transform:scale(.85)} }
+
+/* Header */
+header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 14px 28px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 200; }
+.logo { display: flex; align-items: center; gap: 10px; }
+.logo-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--cyan); box-shadow: 0 0 8px var(--cyan); animation: pulse 2s infinite; }
+.logo h1 { font-size: 15px; font-weight: 600; }
+.logo span { font-size: 11px; color: var(--muted); display: block; }
+.live-badge { font-size: 11px; font-weight: 500; color: var(--emerald); background: rgba(52,211,153,.1); border: 1px solid rgba(52,211,153,.25); border-radius: 20px; padding: 4px 10px; display: flex; align-items: center; gap: 6px; }
+.live-badge::before { content:''; width:6px; height:6px; border-radius:50%; background:var(--emerald); animation:pulse 1.5s infinite; }
+
+/* Tabs */
+.tabs { display: flex; gap: 2px; background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 28px; }
+.tab { padding: 12px 20px; font-size: 12px; font-weight: 500; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; transition: color .15s, border-color .15s; white-space: nowrap; }
+.tab:hover { color: var(--text); }
+.tab.active { color: var(--cyan); border-bottom-color: var(--cyan); }
+
+/* Pages */
+.page { display: none; }
+.page.active { display: block; }
+#stack.active { display: flex !important; }
+#stack.active { display: flex; }
+#stack { height: calc(100vh - 106px); overflow: hidden; }
+  #stack.active { display: flex; height: calc(100vh - 106px); }
+
+/* Dashboard layout */
+.dash-body { padding: 24px 28px; max-width: 1400px; margin: 0 auto; }
+.stats-row { display: grid; grid-template-columns: repeat(5,1fr); gap: 14px; margin-bottom: 24px; }
+.stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 18px; position: relative; overflow: hidden; }
+.stat-card::before { content:''; position:absolute; top:0; left:0; right:0; height:2px; }
+.stat-card.cyan::before  { background: var(--cyan); }
+.stat-card.emerald::before { background: var(--emerald); }
+.stat-card.violet::before  { background: var(--violet); }
+.stat-card.amber::before   { background: var(--amber); }
+.stat-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; margin-bottom: 6px; }
+.stat-value { font-size: 30px; font-weight: 700; line-height: 1; }
+.stat-card.cyan   .stat-value { color: var(--cyan); }
+.stat-card.emerald .stat-value { color: var(--emerald); }
+.stat-card.violet  .stat-value { color: var(--violet); }
+.stat-card.amber   .stat-value { color: var(--amber); }
+.stat-sub { font-size: 11px; color: var(--muted); margin-top: 5px; }
+.stat-icon { position: absolute; right: 14px; top: 14px; font-size: 20px; opacity: .25; }
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 18px; }
+.panel { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+.panel-header { padding: 14px 18px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+.panel-title { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; }
+.pdot { width: 7px; height: 7px; border-radius: 50%; }
+.pdot.cyan    { background: var(--cyan);    box-shadow: 0 0 5px var(--cyan); }
+.pdot.emerald { background: var(--emerald); box-shadow: 0 0 5px var(--emerald); }
+.pdot.violet  { background: var(--violet);  box-shadow: 0 0 5px var(--violet); }
+.pdot.amber   { background: var(--amber);   box-shadow: 0 0 5px var(--amber); }
+.pdot.blue    { background: var(--blue);    box-shadow: 0 0 5px var(--blue); }
+.pbadge { font-size: 10px; padding: 2px 8px; border-radius: 20px; font-weight: 500; }
+.b-cyan    { background: rgba(34,211,238,.12);  color: var(--cyan);    border: 1px solid rgba(34,211,238,.25); }
+.b-emerald { background: rgba(52,211,153,.12);  color: var(--emerald); border: 1px solid rgba(52,211,153,.25); }
+.b-violet  { background: rgba(167,139,250,.12); color: var(--violet);  border: 1px solid rgba(167,139,250,.25); }
+.b-amber   { background: rgba(251,191,36,.12);  color: var(--amber);   border: 1px solid rgba(251,191,36,.25); }
+.b-muted   { background: rgba(100,116,139,.12); color: var(--muted);   border: 1px solid rgba(100,116,139,.25); }
+.panel-body { padding: 14px 18px; }
+
+/* Kanban */
+.kanban-cols { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; padding: 14px 18px; }
+.kcol-header { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); margin-bottom: 8px; display: flex; align-items: center; gap: 5px; }
+.kcol-count { background: var(--surface2); border-radius: 10px; padding: 1px 6px; font-size: 10px; }
+.kcard { background: var(--surface2); border: 1px solid var(--border); border-radius: 7px; padding: 10px 12px; margin-bottom: 7px; transition: border-color .15s, transform .15s; }
+.kcard:hover { border-color: var(--border2); transform: translateY(-1px); }
+.kcard-title { font-size: 12px; font-weight: 500; line-height: 1.4; margin-bottom: 7px; }
+.kcard-meta { display: flex; align-items: center; justify-content: space-between; }
+.kid { font-size: 10px; color: var(--muted); font-family: monospace; }
+.sdot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
+.empty-col { font-size: 11px; color: var(--muted); padding: 6px 0; }
+
+/* Automations */
+.auto-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 14px 18px; }
+.auto-card { background: var(--surface2); border: 1px solid var(--border); border-radius: 7px; padding: 12px; display: flex; gap: 10px; align-items: flex-start; }
+.auto-icon { font-size: 18px; flex-shrink: 0; }
+.auto-title { font-size: 12px; font-weight: 600; margin-bottom: 3px; }
+.auto-desc { font-size: 11px; color: var(--muted); line-height: 1.4; }
+.auto-st { margin-top: 6px; font-size: 10px; font-weight: 500; }
+.auto-st.pending { color: var(--amber); }
+.auto-st.ready   { color: var(--emerald); }
+
+/* Cron */
+.cron-empty { text-align: center; padding: 28px 16px; color: var(--muted); }
+.cron-empty-icon { font-size: 24px; margin-bottom: 8px; opacity: .4; }
+.cron-hint { margin-top: 10px; font-size: 11px; color: var(--border2); background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 7px 10px; display: inline-block; }
+.cron-item { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.cron-item:last-child { border-bottom: none; }
+.cron-name { font-size: 12px; font-weight: 500; }
+
+/* Tables */
+table { width: 100%; border-collapse: collapse; }
+th { font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 600; padding: 0 0 8px 0; text-align: left; border-bottom: 1px solid var(--border); }
+td { padding: 9px 0; font-size: 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+tr:last-child td { border-bottom: none; }
+.muted { color: var(--muted); }
+.small { font-size: 11px; }
+.crole { font-size: 10px; padding: 2px 7px; border-radius: 10px; }
+.r-ceo { background: rgba(34,211,238,.1);  color: var(--cyan);   border: 1px solid rgba(34,211,238,.2); }
+.r-cto { background: rgba(167,139,250,.1); color: var(--violet); border: 1px solid rgba(167,139,250,.2); }
+.r-biz { background: rgba(251,191,36,.1);  color: var(--amber);  border: 1px solid rgba(251,191,36,.2); }
+.cli a { color: var(--blue); text-decoration: none; font-size: 11px; }
+.cli a:hover { text-decoration: underline; }
+.istatus { font-size: 10px; padding: 2px 7px; border-radius: 10px; }
+.i-pending { background: rgba(251,191,36,.1);  color: var(--amber);   border: 1px solid rgba(251,191,36,.2); }
+.i-done    { background: rgba(52,211,153,.1);   color: var(--emerald); border: 1px solid rgba(52,211,153,.2); }
+
+/* Quick actions */
+.qa { background: var(--surface2); border: 1px solid var(--border); border-radius: 7px; padding: 10px 12px; font-size: 12px; color: var(--muted); margin-bottom: 7px; }
+.qa strong { color: var(--text); }
+
+/* Footer */
+footer { margin-top: 28px; padding: 14px 28px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); }
+
+/* Stack Map */
+#map-area { flex: 1; min-width: 0; position: relative; overflow: hidden; background: #f8f8f6; }
+#canvas { display: block; }
+#stack-panel { width: 300px; min-width: 300px; background: #fff; border-left: 1px solid rgba(0,0,0,.1); padding: 18px 16px; overflow-y: auto; font-size: 13px; color: #1a1a18; display: flex; flex-direction: column; position: relative; }
+#sp-empty { flex: 1; display: flex; align-items: center; justify-content: center; text-align: center; color: #bbb; font-size: 12px; line-height: 1.6; }
+#sp-content { display: none; }
+#stack-panel.has-content #sp-empty { display: none; }
+#stack-panel.has-content #sp-content { display: block; }
+#sp-close { position: absolute; top: 10px; right: 12px; background: none; border: none; font-size: 18px; color: #ccc; cursor: pointer; }
+#sp-close:hover { color: #888; }
+#stack-panel h2 { font-size: 17px; margin-bottom: 2px; }
+#stack-panel .p-type { font-size: 12px; color: #888; margin-bottom: 12px; }
+#stack-panel .p-detail { font-size: 12px; color: #666; background: #f5f5f3; padding: 7px 9px; border-radius: 6px; margin-bottom: 14px; }
+#stack-panel .p-section { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: #aaa; margin: 14px 0 6px; }
+#stack-panel ul { list-style: none; }
+#stack-panel li { margin-bottom: 4px; line-height: 1.5; }
+#stack-panel a { color: #185fa5; text-decoration: none; }
+#stack-panel a:hover { text-decoration: underline; }
+#stack-panel .p-open-note { display: inline-block; margin-bottom: 4px; padding: 6px 11px; background: #185fa5; color: #fff; border-radius: 6px; font-size: 12px; font-weight: 500; }
+#stack-panel .p-conn { display: inline-block; padding: 2px 7px; margin: 0 3px 3px 0; background: #f0f0ee; border-radius: 10px; font-size: 11px; }
+.node rect { stroke-width: 1.5; cursor: pointer; transition: opacity .2s; }
+.node text { font-size: 11px; font-weight: 600; pointer-events: none; fill: #fff; font-family: -apple-system, sans-serif; }
+.node .subtext { font-size: 9px; font-weight: 400; fill: rgba(255,255,255,.75); }
+.node.dimmed { opacity: .15; }
+.node.highlighted rect { stroke: #fff; stroke-width: 2.5; }
+.link { fill: none; stroke: #ccc; stroke-width: 1.5; opacity: .6; }
+.link.highlighted { stroke: #444; opacity: 1; stroke-width: 2; }
+.link.dimmed { opacity: .05; }
+.layer-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; fill: #aaa; }
+#tooltip { position: fixed; background: #1a1a18; color: #e8e6e0; padding: 10px 13px; border-radius: 8px; font-size: 12px; max-width: 240px; pointer-events: none; display: none; line-height: 1.6; z-index: 999; }
+#tooltip strong { display: block; font-size: 13px; margin-bottom: 4px; }
+#tooltip .t-type { color: #888; font-size: 11px; margin-bottom: 6px; }
+#tooltip .t-items li { color: #b4b2a9; font-size: 11px; margin-bottom: 1px; }
+#legend { position: absolute; bottom: 16px; left: 16px; display: flex; gap: 10px; flex-wrap: wrap; background: rgba(255,255,255,.9); padding: 7px 10px; border-radius: 8px; border: 1px solid rgba(0,0,0,.1); font-size: 11px; color: #555; }
+.legend-item { display: flex; align-items: center; gap: 5px; }
+.legend-dot { width: 10px; height: 10px; border-radius: 3px; }
+#hint { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); font-size: 11px; color: #aaa; background: rgba(255,255,255,.85); padding: 4px 12px; border-radius: 20px; border: 1px solid rgba(0,0,0,.08); white-space: nowrap; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+
+@media (max-width: 900px) {
+  .stats-row, .grid-2 { grid-template-columns: 1fr; }
+  .kanban-cols, .auto-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-dot"></div>
+    <div><h1>Lucas Nanini · Command Center</h1><span>Powered by Hermes Agent</span></div>
+  </div>
+  <div style="display:flex;align-items:center;gap:14px">
+    <span class="live-badge">Hermes Active</span>
+    <span style="font-size:11px;color:var(--muted)" id="clock"></span>
+  </div>
+</header>
+
+<div class="tabs">
+  <div class="tab active" data-tab="dashboard">📊 Dashboard</div>
+  <div class="tab" data-tab="stack">🗺️ Stack Map</div>
+  <div class="tab" data-tab="intros">🤝 Intros</div>
+  <div class="tab" data-tab="contacts">👥 VivaTech</div>
+</div>
+
+<!-- ══ DASHBOARD ══ -->
+<div id="dashboard" class="page active">
+<div class="dash-body">
+  <div class="stats-row">
+    <div class="stat-card cyan">
+      <div class="stat-icon">📋</div>
+      <div class="stat-label">Kanban Tasks</div>
+      <div class="stat-value">3</div>
+      <div class="stat-sub">3 ready · 0 in progress</div>
+    </div>
+    <div class="stat-card emerald">
+      <div class="stat-icon">🤝</div>
+      <div class="stat-label">Intros Tracked</div>
+      <div class="stat-value">2</div>
+      <div class="stat-sub">2 pending · WhatsApp reminders actifs</div>
+    </div>
+    <div class="stat-card violet">
+      <div class="stat-icon">🚀</div>
+      <div class="stat-label">Projets actifs</div>
+      <div class="stat-value">8</div>
+      <div class="stat-sub">Harmattan · AËDO · NOLEO · Boussole · TokenPilot · Chinese Reader · Paris Terrasse · CoS</div>
+    </div>
+    <div class="stat-card rose" style="--rose:#a78bfa">
+      <div class="stat-icon">💸</div>
+      <div class="stat-label">Coûts API / mois</div>
+      <div class="stat-value" style="color:#a78bfa">~$20</div>
+      <div class="stat-sub">Claude ~$10 · OpenAI ~$5 · Twilio ~$5</div>
+    </div>
+    <div class="stat-card amber">
+      <div class="stat-icon">⚡</div>
+      <div class="stat-label">Cron Jobs</div>
+      <div class="stat-value">5</div>
+      <div class="stat-sub">Stack 7h · Dashboard 8h · LinkedIn 8h30 · Intros 9h · LinkedIn Replies 2d</div>
+    </div>
+  </div>
+
+  <div class="grid-2">
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title"><span class="pdot emerald"></span>My Tasks</div>
+        <span class="pbadge b-emerald">personal board</span>
+      </div>
+      <div class="kanban-cols">
+        <div>
+          <div class="kcol-header"><span class="sdot" style="background:var(--emerald)"></span>Ready<span class="kcol-count">1</span></div>
+          <div class="kcard"><div class="kcard-title">Set up innovation trend monitoring agent</div><div class="kcard-meta"><span class="kid">t_4ee8db07</span><span class="pbadge b-emerald">ready</span></div></div>
+        </div>
+        <div>
+          <div class="kcol-header"><span class="sdot" style="background:var(--cyan)"></span>In Progress<span class="kcol-count">0</span></div>
+          <div class="empty-col">Nothing running</div>
+        </div>
+        <div>
+          <div class="kcol-header"><span class="sdot" style="background:var(--muted)"></span>Done<span class="kcol-count">0</span></div>
+          <div class="empty-col">Completed appear here</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title"><span class="pdot cyan"></span>Automations</div>
+        <span class="pbadge b-muted">Ask Hermes to activate</span>
+      </div>
+      <div class="auto-grid">
+        <div class="auto-card"><div class="auto-icon">📡</div><div><div class="auto-title">Trend Monitor</div><div class="auto-desc">Daily briefing on startup & tech trends</div><div class="auto-st pending">⏳ Not scheduled</div></div></div>
+        <div class="auto-card"><div class="auto-icon">🔍</div><div><div class="auto-title">Event Prep Agent</div><div class="auto-desc">Auto-research contacts for any event</div><div class="auto-st ready">✅ Ready on demand</div></div></div>
+        <div class="auto-card"><div class="auto-icon">✉️</div><div><div class="auto-title">Outreach Drafter</div><div class="auto-desc">Drafts + mailto: links pour Outlook</div><div class="auto-st ready">✅ Ready on demand</div></div></div>
+        <div class="auto-card"><div class="auto-icon">📝</div><div><div class="auto-title">Meeting Briefer</div><div class="auto-desc">1-page brief avant chaque réunion</div><div class="auto-st ready">✅ Ready on demand</div></div></div>
+        <div class="auto-card"><div class="auto-icon">🤝</div><div><div class="auto-title">Intro Reminders</div><div class="auto-desc">WhatsApp J+3 · Suivi J+21</div><div class="auto-st ready">✅ Daily 9h</div></div></div>
+        <div class="auto-card"><div class="auto-icon">🔄</div><div><div class="auto-title">Dashboard Refresh</div><div class="auto-desc">Live data rechargées chaque matin</div><div class="auto-st ready">✅ Daily 8h</div></div></div>
+        <div class="auto-card"><div class="auto-icon">💬</div><div><div class="auto-title">LinkedIn Comment Replies</div><div class="auto-desc">Reply to comments on your posts · past 2 weeks</div><div class="auto-st ready">✅ Every 2 days 9h</div></div></div>
+        <div class="auto-card"><div class="auto-icon">🔵</div><div><div class="auto-title">LinkedIn Proactive Commenting</div><div class="auto-desc">Draft comments on feed posts in your interest areas</div><div class="auto-st ready">✅ Daily 8h30</div></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid-2">
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title"><span class="pdot emerald"></span>Intros Tracker</div>
+        <span class="pbadge b-amber">2 pending</span>
+      </div>
+      <div class="panel-body">
+        <table>
+          <thead><tr><th>Personnes</th><th>Pourquoi</th><th>Status</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><strong>Mazen</strong> <span class="muted">MAGIQUE Studio</span><br><strong>Melvyn</strong> <span class="muted">Studio 11:16</span></td>
+              <td class="muted small">Mazen cherche bureaux 100/200m² Paris — Melvyn quitte bientôt les siens</td>
+              <td><span class="istatus i-pending">⏳ À faire</span></td>
+            </tr>
+            <tr>
+              <td><strong>Mazen</strong> <span class="muted">MAGIQUE Studio</span><br><strong>Luyi</strong> <span class="muted">Prod France/Chine</span></td>
+              <td class="muted small">Prod en Chine et France — synergies avec MAGIQUE Studio</td>
+              <td><span class="istatus i-pending">⏳ À faire</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title"><span class="pdot blue"></span>Quick Actions</div>
+        <span class="pbadge b-cyan">Dis à Hermes</span>
+      </div>
+      <div class="panel-body">
+        <div class="qa">💬 <strong>"Log une intro: X devrait rencontrer Y parce que..."</strong></div>
+        <div class="qa">💬 <strong>"Rédige l'intro entre Mazen et Melvyn"</strong></div>
+        <div class="qa">💬 <strong>"Prépare un brief pour ma réunion avec ElevenLabs"</strong></div>
+        <div class="qa">💬 <strong>"Schedule un briefing innovation tous les matins à 8h"</strong></div>
+      </div>
+    </div>
+  </div>
+</div>
+<footer><span>Lucas Nanini · Command Center · Hermes Agent</span><span>Mis à jour: 21 Jun 2026 · 17:47</span></footer>
+</div>
+
+<!-- ══ STACK MAP ══ -->
+<div id="stack" class="page">
+  <div id="map-area">
+    <svg id="canvas"></svg>
+    <div id="tooltip"></div>
+    <div id="legend"></div>
+    <div id="hint">Cliquer un nœud pour le détail · Scroll pour zoomer · Drag pour déplacer</div>
+  </div>
+  <div id="stack-panel">
+    <div id="sp-empty">Cliquer un nœud<br>pour voir ses détails</div>
+    <div id="sp-content">
+      <button id="sp-close">&times;</button>
+      <div id="sp-body"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ INTROS ══ -->
+<div id="intros" class="page">
+<div class="dash-body">
+  <div class="panel">
+    <div class="panel-header">
+      <div class="panel-title"><span class="pdot emerald"></span>Intros Tracker</div>
+      <span class="pbadge b-amber">2 pending · Reminders WhatsApp actifs</span>
+    </div>
+    <div class="panel-body">
+      <table>
+        <thead><tr><th>Personnes</th><th>Pourquoi</th><th>Intro faite?</th><th>Suivi?</th><th>Date</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>Mazen</strong> <span class="muted">MAGIQUE Studio</span><br><strong>Melvyn</strong> <span class="muted">Studio 11:16</span></td>
+            <td class="muted small">Mazen cherche bureaux 100/200m² centre Paris — Melvyn quitte bientôt ses bureaux. Pourraient bosser ensemble.</td>
+            <td><span class="istatus i-pending">⏳ À faire</span></td><td>—</td><td class="muted small">2026-06-21</td>
+          </tr>
+          <tr>
+            <td><strong>Mazen</strong> <span class="muted">MAGIQUE Studio</span><br><strong>Luyi</strong> <span class="muted">Prod France/Chine</span></td>
+            <td class="muted small">Luyi fait de la prod en Chine et France pour boîtes chinoises/françaises — synergies potentielles.</td>
+            <td><span class="istatus i-pending">⏳ À faire</span></td><td>—</td><td class="muted small">2026-06-21</td>
+          </tr>
+        </tbody>
+      </table>
+      <div style="margin-top:16px;font-size:11px;color:var(--muted);background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px">
+        🔔 <strong style="color:var(--text)">Rappels automatiques</strong> — WhatsApp J+3 si intro non faite · Suivi J+21 après intro<br>
+        💬 <strong style="color:var(--text)">"Intro faite entre Mazen et Melvyn"</strong> pour marquer comme fait
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+</div>
+</div>
+
+<script>
+// ── TABS ──
+document.querySelectorAll('[data-tab]').forEach(function(el) {
+  el.addEventListener('click', function() { switchTab(this.dataset.tab, this); });
+});
+
+function switchTab(id, el) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById(id).classList.add('active');
+  if (id === 'stack' && !window._stackDone) {
+    window._stackDone = true;
+    setTimeout(renderStack, 150);
+  }
+}
+
+// ── CLOCK ──
+function updateClock() {
+  const n = new Date();
+  document.getElementById('clock').textContent =
+    n.toLocaleDateString('fr-FR', {weekday:'short',day:'numeric',month:'short',year:'numeric'}) +
+    ' · ' + n.toLocaleTimeString('fr-FR', {hour:'2-digit',minute:'2-digit'});
+}
+updateClock();
+setInterval(updateClock, 30000);
+
+// ── STACK HEALTH ──
+// Updated by cron every morning at 7:00 — do not edit manually
+const HEALTH = {"make":"up","railway":"up","supabase":"up","vercel":"up","cos_app":"up","boussole":"down","hermes":"up","claude_api":"up","openai":"up","whisper":"up","twilio":"up","brave":"up"};
+const HEALTH_TS = "21/06/2026 18:33";
+
+// ── STACK MAP ──
+const STACK = {"layers": [{"id": "inputs", "label": "Inputs", "color": "#4bb896", "role": "Raw signals entering the stack"}, {"id": "orchestration", "label": "Orchestration", "color": "#6e67cc", "role": "Automation and routing"}, {"id": "intelligence", "label": "Intelligence", "color": "#d4891e", "role": "AI and processing"}, {"id": "storage", "label": "Storage", "color": "#2e7bc4", "role": "Data, documents, knowledge"}, {"id": "outputs", "label": "Outputs", "color": "#c44e2a", "role": "Actionable surfaces"}, {"id": "projects", "label": "Projects", "color": "#777770", "role": "Active domains"}], "nodes": [{"id": "gmail_perso", "name": "Gmail (personal)", "type": "lucas.nanini@gmail.com", "layer": "inputs", "items": ["Personal signals", "Harmattan supplier comms", "CoS source", "Email scoring pipeline"]}, {"id": "elc_email", "name": "Outlook (ELC)", "type": "lnanini@estee.com \u00b7 Microsoft 365", "layer": "inputs", "items": ["L'Atelier ELC comms", "ELC internal", "Professional signals"]}, {"id": "whatsapp", "name": "WhatsApp", "type": "Messaging \u00b7 capture", "layer": "inputs", "items": ["Voice notes", "Links & ideas", "CoS output channel", "PKM input (planned)"]}, {"id": "gcal", "name": "Google Calendar", "type": "Calendar \u00b7 Google", "layer": "inputs", "items": ["CoS source", "Meeting context for brief"]}, {"id": "screenshots", "name": "Screenshots", "type": "Visual capture \u00b7 mobile", "layer": "inputs", "badge": "planned", "items": ["Ideas from social/web", "Claude Vision processing (planned)"]}, {"id": "make", "name": "Make.com", "type": "Automation \u00b7 no-code", "layer": "orchestration", "detail": "Credential: 1Password", "items": ["CoS pipeline", "Gmail scoring", "WhatsApp delivery", "Innovation briefing"], "docs": [{"label": "Make.com dashboard", "url": "https://www.make.com"}]}, {"id": "twilio", "name": "Twilio", "type": "Messaging API", "layer": "orchestration", "detail": "Credential: 1Password", "items": ["WhatsApp bridge", "Brief delivery"]... [truncated]
+const NW = 150, NH = 44;
+
+async function renderStack() {
+  const { layers: L, nodes: N, edges: E } = STACK;
+  const LC = Object.fromEntries(L.map(l => [l.id, l.color]));
+  const LO = L.map(l => l.id);
+  const nById = Object.fromEntries(N.map(n => [n.id, n]));
+  const allE = E.filter(e => nById[e.source] && nById[e.target]);
+  const LI = Object.fromEntries(LO.map((l, i) => [l, i]));
+  const fwd = allE.filter(e => {
+    const si = LI[nById[e.source].layer], ti = LI[nById[e.target].layer];
+    return si !== ti && si < ti;
+  });
+  const same = allE.filter(e => nById[e.source].layer === nById[e.target].layer);
+
+  const elk = new ELK();
+  const laid = await elk.layout({
+    id: "root",
+    layoutOptions: {
+      "elk.algorithm": "layered", "elk.direction": "RIGHT",
+      "elk.edgeRouting": "ORTHOGONAL", "elk.partitioning.activate": "true",
+      "elk.separateConnectedComponents": "false",
+      "elk.layered.spacing.nodeNodeBetweenLayers": "130",
+      "elk.spacing.nodeNode": "30"
+    },
+    children: N.map(n => ({id: n.id, width: NW, height: NH, layoutOptions: {"elk.partitioning.partition": String(LO.indexOf(n.layer))}})),
+    edges: fwd.map((e, i) => ({id: "e"+i, sources: [e.source], targets: [e.target]}))
+  });
+  laid.children.forEach(c => { const n = nById[c.id]; n.x = c.x; n.y = c.y; });
+
+  const ma = document.getElementById("map-area");
+  const rect = ma.getBoundingClientRect();
+  const W = rect.width > 50 ? rect.width : window.innerWidth - 300;
+  const H = rect.height > 50 ? rect.height : window.innerHeight - 106;
+  console.log('Stack map dimensions:', W, H);
+
+  const svg = d3.select("#canvas").attr("width", W).attr("height", H);
+  const g = svg.append("g");
+  const zoom = d3.zoom().scaleExtent([0.1, 2.5]).on("zoom", e => g.attr("transform", e.transform));
+  svg.call(zoom);
+
+  const colX = {};
+  N.forEach(n => { colX[n.layer] = Math.min(colX[n.layer] ?? n.x, n.x); });
+  const topY = Math.min(...N.map(n => n.y)) - 34;
+  const botY = Math.max(...N.map(n => n.y + NH)) + 20;
+
+  LO.forEach(lid => {
+    const l = L.find(x => x.id === lid);
+    g.append("text").attr("class","layer-label")
+      .attr("x", colX[lid] + NW/2).attr("y", topY)
+      .attr("text-anchor","middle").attr("fill", l.color).text(l.label);
+  });
+
+  const ep = le => {
+    const s = le.sections?.[0];
+    if (!s) return "";
+    return [s.startPoint, ...(s.bendPoints || []), s.endPoint]
+      .map((p, i) => `${i?"L":"M"}${p.x},${p.y}`).join(" ");
+  };
+
+  const lk = g.selectAll(".link").data(laid.edges).enter().append("path")
+    .attr("class","link").attr("d", ep)
+    .each(function(d, i) { d._s = fwd[i].source; d._t = fwd[i].target; });
+
+  const sl = g.selectAll(".sl").data(same).enter().append("path").attr("class","link")
+    .attr("d", (e, i) => {
+      const s = nById[e.source], t = nById[e.target];
+      const sy = s.y+NH/2, ty = t.y+NH/2, lane = s.x-14-(i%4)*7;
+      return `M${s.x},${sy} L${lane},${sy} L${lane},${ty} L${t.x},${ty}`;
+    })
+    .each(function(e) { e._s = e.source; e._t = e.target; });
+
+  const tt = document.getElementById("tooltip");
+  const nd = g.selectAll(".node").data(N).enter().append("g")
+    .attr("class","node").attr("transform", d => `translate(${d.x},${d.y})`);
+
+  nd.append("rect").attr("width", NW).attr("height", NH)
+    .attr("fill", d => d.id === "hermes" ? "#1a1a2e" : LC[d.layer])
+    .attr("stroke", d => d.id === "hermes" ? "#22d3ee" : d3.color(LC[d.layer]).darker(0.5))
+    .attr("stroke-width", d => d.id === "hermes" ? 2.5 : 1.5)
+    .attr("rx", 6);
+
+  nd.append("text").attr("x", NW/2).attr("y", 18).attr("text-anchor","middle").text(d => d.name);
+  nd.append("text").attr("class","subtext").attr("x", NW/2).attr("y", 32).attr("text-anchor","middle").text(d => d.type);
+
+  // Health status dot
+  nd.append("circle")
+    .attr("cx", NW - 10).attr("cy", 10).attr("r", 4.5)
+    .attr("fill", d => HEALTH[d.id] === "up" ? "#34d399" : HEALTH[d.id] === "down" ? "#fb7185" : "transparent")
+    .attr("stroke", d => HEALTH[d.id] === "up" ? "#34d399" : HEALTH[d.id] === "down" ? "#fb7185" : "transparent")
+    .attr("stroke-width", 1)
+    .style("filter", d => HEALTH[d.id] ? "drop-shadow(0 0 3px currentColor)" : "none")
+    .append("title").text(d => HEALTH[d.id] === "up" ? `✅ ${d.name} — UP` : HEALTH[d.id] === "down" ? `❌ ${d.name} — DOWN` : "");
+
+  // Health legend + timestamp
+  const legendY = botY + 38;
+  g.append("circle").attr("cx", 12).attr("cy", legendY).attr("r", 4).attr("fill", "#34d399");
+  g.append("text").attr("x", 22).attr("y", legendY + 4).attr("fill", "#64748b").attr("font-size", "10").text("UP");
+  g.append("circle").attr("cx", 52).attr("cy", legendY).attr("r", 4).attr("fill", "#fb7185");
+  g.append("text").attr("x", 62).attr("y", legendY + 4).attr("fill", "#64748b").attr("font-size", "10").text("DOWN");
+  g.append("text").attr("x", 100).attr("y", legendY + 4).attr("fill", "#334155").attr("font-size", "10").text(`Last check: ${HEALTH_TS}`);
+
+  const conn = id => {
+    const s = new Set();
+    allE.forEach(e => { if (e.source===id) s.add(e.target); if (e.target===id) s.add(e.source); });
+    return s;
+  };
+
+  const panel = document.getElementById("stack-panel");
+  const pb = document.getElementById("sp-body");
+  const VAULT = "lucas-vault", ND = "03-Work/Stack";
+  const obs = name => `obsidian://open?vault=${encodeURIComponent(VAULT)}&file=${encodeURIComponent(ND+"/"+name)}`;
+
+  function openPanel(d) {
+    const cn = [...conn(d.id)].map(id => nById[id]).filter(Boolean);
+    const items = (d.items||[]).map(i => `<li>${i}</li>`).join("");
+    const docs = (d.docs||[]).map(doc => {
+      const ob = doc.url ? `<a style="font-size:11px;padding:3px 7px;border-radius:5px;background:#185fa5;color:#fff;text-decoration:none" href="${doc.url}" target="_blank">Open ↗</a>` : "";
+      return `<li style="display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px solid rgba(0,0,0,.06)">
+        <span style="font-size:12px">${doc.label}</span>
+        <span style="display:flex;gap:4px">${ob}<a style="font-size:11px;padding:3px 7px;border-radius:5px;background:#6e57c4;color:#fff;text-decoration:none" href="${obs((doc.obsidian||d.name)+'.md')}">Obsidian</a></span></li>`;
+    }).join("");
+    pb.innerHTML = `
+      <h2>${d.name}</h2><div class="p-type">${d.type}</div>
+      ${d.detail ? `<div class="p-detail">${d.detail}</div>` : ""}
+      <a class="p-open-note" href="${obs(d.name+'.md')}">Open in Obsidian →</a>
+      ${docs ? `<div class="p-section">Documents</div><ul style="list-style:none">${docs}</ul>` : ""}
+      <div class="p-section">Contenus</div><ul>${items}</ul>
+      <div class="p-section">Connecté à</div>
+      <div>${cn.map(c => `<span class="p-conn">${c.name}</span>`).join("")}</div>`;
+    panel.classList.add("has-content");
+  }
+
+  document.getElementById("sp-close").onclick = e => { e.stopPropagation(); panel.classList.remove("has-content"); clr(); };
+
+  let active = null;
+  function clr() {
+    active = null;
+    nd.classed("dimmed", false).classed("highlighted", false);
+    lk.classed("highlighted", false).classed("dimmed", false);
+    sl.classed("highlighted", false).classed("dimmed", false);
+    panel.classList.remove("has-content");
+  }
+
+  nd.on("click", (ev, d) => {
+    ev.stopPropagation();
+    if (active === d.id) return clr();
+    active = d.id;
+    const c = conn(d.id);
+    nd.classed("dimmed", n => n.id !== d.id && !c.has(n.id));
+    nd.classed("highlighted", n => c.has(n.id) || n.id === d.id);
+    lk.classed("highlighted", e => e._s===d.id||e._t===d.id);
+    lk.classed("dimmed", e => e._s!==d.id&&e._t!==d.id);
+    sl.classed("highlighted", e => e._s===d.id||e._t===d.id);
+    sl.classed("dimmed", e => e._s!==d.id&&e._t!==d.id);
+    openPanel(d);
+  })
+  .on("mouseover", (ev, d) => {
+    tt.style.display = "block";
+    tt.innerHTML = `<strong>${d.name}</strong><div class="t-type">${d.type}</div><ul class="t-items">${(d.items||[]).map(i=>`<li>${i}</li>`).join("")}</ul>`;
+  })
+  .on("mousemove", ev => { tt.style.left=(ev.clientX+14)+"px"; tt.style.top=(ev.clientY-10)+"px"; })
+  .on("mouseout", () => { tt.style.display="none"; });
+  svg.on("click", clr);
+
+  // Fit to view
+  const mnX = Math.min(...N.map(n=>n.x))-20, mxX = Math.max(...N.map(n=>n.x+NW))+20;
+  const mnY = topY-10, mxY = botY;
+  const sc = Math.min(W/(mxX-mnX), (H-80)/(mxY-mnY)) * 0.92;
+  svg.call(zoom.transform, d3.zoomIdentity
+    .translate((W-(mxX-mnX)*sc)/2 - mnX*sc, (H-(mxY-mnY)*sc)/2 - mnY*sc)
+    .scale(sc));
+
+  // Legend
+  const leg = document.getElementById("legend");
+  L.forEach(l => {
+    const it = document.createElement("div"); it.className = "legend-item";
+    it.innerHTML = `<div class="legend-dot" style="background:${l.color}"></div>${l.label}`;
+    leg.appendChild(it);
+  });
+  const hi = document.createElement("div"); hi.className = "legend-item";
+  hi.innerHTML = `<div class="legend-dot" style="background:#1a1a2e;border:1.5px solid #22d3ee"></div>Hermes`;
+  leg.appendChild(hi);
+}
+</script>
+
+<!-- ══ CONTACTS ══ -->
+<div id="contacts" class="page">
+<div class="dash-body">
+  <div class="panel">
+    <div class="panel-header">
+      <div class="panel-title"><span class="pdot violet"></span>VivaTech 2026 — Contacts Clés</div>
+      <span class="pbadge b-violet">37 contacts · 31 entreprises</span>
+    </div>
+    <div class="panel-body" style="overflow-x:auto">
+      <table>
+        <thead><tr><th>Nom</th><th>Entreprise</th><th>Rôle</th><th>LinkedIn</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Julien Martinez</strong></td><td class="muted">Archilys</td><td><span class="crole r-ceo">CEO</span></td><td class="cli"><a href="https://www.linkedin.com/in/julien-martinez-archilys/" target="_blank">View →</a></td></tr>
+          <tr><td><strong>Stéphane Jacquet</strong></td><td class="muted">Archilys</td><td><span class="crole r-cto">CTO</span></td><td class="cli"><a href="https://www.linkedin.com/in/stephane-jacquet/" target="_blank">View →</a></td></tr>
+          <tr><td><strong>Jade Noury</strong></td><td class="muted">Archilys</td><td><span class="crole r-biz">Partnerships</span></td><td class="cli"><a href="https://www.linkedin.com/in/jade-noury/" target="_blank">View →</a></td></tr>
+          <tr><td><strong>Jack Gervais</strong></td><td class="muted">BONJAC / Selvatico</td><td><span class="crole r-ceo">CEO</span></td><td class="cli"><a href="https://www.linkedin.com/in/jack-gervais/" target="_blank">View →</a></td></tr>
+          <tr><td><strong>François Gaudier</strong></td><td class="muted">Gaudier</td><td><span class="crole r-ceo">CEO</span></td><td class="cli"><a href="https://www.linkedin.com/in/francois-gaudier/" target="_blank">View →</a></td></tr>
+          <tr><td><strong>Clément Chapiron</strong></td><td class="muted">Gaudier</td><td><span class="crole r-cto">CTO</span></td><td class="cli"><a href="https://www.linkedin.com/in/clement-chapiron/" target="_blank">View →</a></td></tr>
+          <tr><td><strong>Paul Lahmi</strong></td><td class="muted">HABS</td><td><span class="crole r-ceo">CEO</span></td><td class="cli"><a href="https://www.linkedin.com/in/paul-lahmi/" target="_blank">View →</a></td></tr>
+          <tr><td><strong>Steve Nkwanga</strong></td><td class="muted">Igonogo</td><td><span class="crole r-ceo">CEO</span></td><td class="cli"><a href="https://www.linkedin.com/in/steve-nkwanga/" target="_blank">View →</a></td></tr>
+          <tr><td><strong>Samuel Matovu</strong></td><td class="muted">Igonogo</td><td><span class="crole r-cto">CTO</span></td><td class="cli"><a href="https://www.linkedin.com/in/samuel-matovu/" target="_blank">View →</a></td></tr>
+          <tr><td><strong>Maud Mignot</strong></td><td class="muted">ININUM</td><td><span class="crole r-ceo">CEO</span></td><td class="cli"><a href="https://www.linkedin.com/in/maud-mignot/" target="_blank">View →</a></td></tr>
+          <tr><td><strong>Quentin Durand</strong></td><td class="muted">ININUM</td><td><span class="crole r-cto">CTO</span></td><td class="cli"><a href="https://www.linkedin.com/in/quentin-durand/" target="_blank">View →</a></td></tr>
+          <tr><td><strong>Gabriella Mocan</strong></td><td class="muted">Flaunt</td><td><span class="crole r-ceo">CEO</span></td><td class="cli"><a href="https://www.linkedin.com/in/gabriella-mocan/" target="_blank">View →</a></td></tr>
+          <tr><td><strong>Rob Van Tricht</strong></td><td class="muted">Flaunt</td><td><span class="crole r-cto">CTO</span></td><td class="cli"><a href="https://www.linkedin.com/in/rob-van-tricht/" target="_blank">View →</a></td></tr>
+          <tr><td><strong>Roshan Sumbaly</strong></td><td class="muted">GetVocal AI</td><td><span class="crole r-ceo">CEO</span></td><td class="cli"><a href="https://www.linkedin.com/in/rsumbaly/" target="_blank">View →</a></td></tr>
+          <tr><td><strong>Eshan Toorabally</strong></td><td class="muted">GetVocal AI</td><td><span class="crole r-cto">CTO</span></td><td class="cli"><a href="https://www.linkedin.com/in/eshan-toorabally/" target="_blank">View →</a></td></tr>
+          <tr><td><strong>Mati Staniszewski</strong></td><td class="muted">ElevenLabs</td><td><span class="crole r-ceo">CEO</span></td><td class="cli"><a href="https://www.linkedin.com/in/matistan/" target="_blank">View →</a></td></tr>
+          <tr><td><strong>Piotr Dąbkowski</strong></td><td class="muted">ElevenLabs</td><td><span class="crole r-cto">CTO</span></td><td class="cli"><a href="https://www.linkedin.com/in/piotrdabkowski/" target="_blank">View →</a></td></tr>
+          <tr><td><strong>Ben Mathis</strong></td><td class="muted">ElevenLabs</td><td><span class="crole r-biz">Partnerships</span></td><td class="cli"><a href="https://www.linkedin.com/in/benmathis/" target="_blank">View →</a></td></tr>
+          <tr><td><strong>Jade Groomes</strong></td><td class="muted">ElevenLabs</td><td><span class="crole r-biz">Partnerships</span></td><td class="cli"><a href="https://www.linkedin.com/in/jade-groomes/" target="_blank">View →</a></td></tr>
+          <tr><td><strong>Emiliano Pini</strong></td><td class="muted">Beauty Analytics</td><td><span class="crole r-ceo">CEO</span></td><td class="cli"><a href="https://www.linkedin.com/in/emiliano-pini/" target="_blank">View →</a></td></tr>
+          <tr><td><strong>Romain Saffre</strong></td><td class="muted">Beauty Analytics</td><td><span class="crole r-cto">CTO</span></td><td class="cli"><a href="https://www.linkedin.com/in/romain-saffre/" target="_blank">View →</a></td></tr>
+          <tr><td><strong>Jacob Fehr</strong></td><td class="muted">pheal</td><td><span class="crole r-ceo">CEO</span></td><td class="cli"><a href="https://www.linkedin.com/in/jacobfehr/" target="_blank">View →</a></td></tr>
+          <tr><td><strong>Miriam Wagner</strong></td><td class="muted">pheal</td><td><span class="crole r-biz">Partnerships</span></td><td class="cli"><a href="https://www.linkedin.com/in/miriam-wagner-b57413239/" target="_blank">View →</a></td></tr>
+          <tr><td><strong>Joshua Kim</strong></td><td class="muted">Mimetics</td><td><span class="crole r-cto">CTO</span></td><td class="cli"><a href="https://www.linkedin.com/in/joshuakimcto/" target="_blank">View →</a></td></tr>
+          <tr><td><strong>Rotem Golan</strong></td><td class="muted">Point Fit Technology</td><td><span class="crole r-ceo">CEO</span></td><td class="cli"><a href="https://www.linkedin.com/in/rotemgolan/" target="_blank">View →</a></td></tr>
+          <tr><td><strong>Julien Guézennec</strong></td><td class="muted">TACTINNOV</td><td><span class="crole r-ceo">CEO</span></td><td class="cli"><a href="https://www.linkedin.com/in/julienguezennec/" target="_blank">View →</a></td></tr>
+          <tr><td><strong>Alice H. Chang</strong></td><td class="muted">Perfect Corp.</td><td><span class="crole r-ceo">CEO</span></td><td class="cli"><a href="https://www.linkedin.com/in/alice-h-chang/" target="_blank">View →</a></td></tr>
+          <tr><td><strong>Wayne Liu</strong></td><td class="muted">Perfect Corp.</td><td><span class="crole r-biz">President & CBO</span></td><td class="cli"><a href="https://www.linkedin.com/in/wayne-liu-perfectcorp/" target="_blank">View →</a></td></tr>
+          <tr><td><strong>Elad Raz</strong></td><td class="muted">MIRAI AI Labs</td><td><span class="crole r-ceo">CEO</span></td><td class="cli"><a href="https://www.linkedin.com/in/elad-raz/" target="_blank">View →</a></td></tr>
+          <tr><td><strong>Alice Li</strong></td><td class="muted">aeacbio</td><td><span class="crole r-ceo">CEO</span></td><td class="cli"><a href="https://www.linkedin.com/in/alice-li-aeacbio/" target="_blank">View →</a></td></tr>
+          <tr><td><strong>Anastasia Georgievskaya</strong></td><td class="muted">Haut.AI</td><td><span class="crole r-ceo">CEO</span></td><td class="cli"><a href="https://www.linkedin.com/in/anastasia-georgievskaya/" target="_blank">View →</a></td></tr>
+          <tr><td><strong>Artëm Kovalev</strong></td><td class="muted">Haut.AI</td><td><span class="crole r-cto">CTO</span></td><td class="cli"><a href="https://www.linkedin.com/in/artem-kovalev-haut/" target="_blank">View →</a></td></tr>
+          <tr><td><strong>Avery Kalapa</strong></td><td class="muted">Samplistick</td><td><span class="crole r-ceo">CEO</span></td><td class="cli"><a href="https://www.linkedin.com/in/avery-kalapa/" target="_blank">View →</a></td></tr>
+          <tr><td><strong>Isabella Vanderschmidt</strong></td><td class="muted">Shanghai Super Vibe</td><td><span class="crole r-biz">CGO</span></td><td class="cli"><a href="https://www.linkedin.com/in/isabella-vanderschmidt/" target="_blank">View →</a></td></tr>
+          <tr><td><strong>Shen Huang</strong></td><td class="muted">Shanghai Super Vibe</td><td><span class="crole r-cto">CTO</span></td><td class="cli"><a href="https://www.linkedin.com/in/shen-huang-ssv/" target="_blank">View →</a></td></tr>
+          <tr><td><strong>Jose Auguadé</strong></td><td class="muted">Virtysens</td><td><span class="crole r-ceo">CEO</span></td><td class="cli"><a href="https://www.linkedin.com/in/jose-auguade/" target="_blank">View →</a></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+</div>
+
+</body>
+</html>
