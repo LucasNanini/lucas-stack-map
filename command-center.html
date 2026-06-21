@@ -436,10 +436,9 @@ async function renderStack() {
   laid.children.forEach(c => { const n = nById[c.id]; n.x = c.x; n.y = c.y; });
 
   const ma = document.getElementById("map-area");
-  const rect = ma.getBoundingClientRect();
-  const W = rect.width > 50 ? rect.width : window.innerWidth - 300;
-  const H = rect.height > 50 ? rect.height : window.innerHeight - 106;
-  console.log('Stack map dimensions:', W, H);
+  var rect = ma.getBoundingClientRect();
+  var W = rect.width > 50 ? rect.width : window.innerWidth - 300;
+  var H = rect.height > 50 ? rect.height : window.innerHeight - 106;
 
   const svg = d3.select("#canvas").attr("width", W).attr("height", H);
   const g = svg.append("g");
@@ -448,8 +447,8 @@ async function renderStack() {
 
   const colX = {};
   N.forEach(n => { colX[n.layer] = Math.min(colX[n.layer] ?? n.x, n.x); });
-  const topY = Math.min(...N.map(n => n.y)) - 34;
-  const botY = Math.max(...N.map(n => n.y + NH)) + 20;
+  const topY = Math.min.apply(null, N.map(function(n){return n.y;})) - 34;
+  const botY = Math.max.apply(null, N.map(function(n){return n.y + NH;})) + 20;
 
   LO.forEach(lid => {
     const l = L.find(x => x.id === lid);
@@ -461,7 +460,7 @@ async function renderStack() {
   const ep = le => {
     const s = le.sections?.[0];
     if (!s) return "";
-    return [s.startPoint, ...(s.bendPoints || []), s.endPoint]
+    return [s.startPoint].concat(s.bendPoints || []).concat([s.endPoint])
       .map((p, i) => `${i?"L":"M"}${p.x},${p.y}`).join(" ");
   };
 
@@ -519,7 +518,7 @@ async function renderStack() {
   const obs = name => `obsidian://open?vault=${encodeURIComponent(VAULT)}&file=${encodeURIComponent(ND+"/"+name)}`;
 
   function openPanel(d) {
-    const cn = [...conn(d.id)].map(id => nById[id]).filter(Boolean);
+    var cn = Array.from(conn(d.id)).map(function(id) { return nById[id]; }).filter(Boolean);
     const items = (d.items||[]).map(i => `<li>${i}</li>`).join("");
     const docs = (d.docs||[]).map(doc => {
       const ob = doc.url ? `<a style="font-size:11px;padding:3px 7px;border-radius:5px;background:#185fa5;color:#fff;text-decoration:none" href="${doc.url}" target="_blank">Open ↗</a>` : "";
@@ -553,7 +552,7 @@ async function renderStack() {
     ev.stopPropagation();
     if (active === d.id) return clr();
     active = d.id;
-    const c = conn(d.id);
+    var c = conn(d.id);
     nd.classed("dimmed", n => n.id !== d.id && !c.has(n.id));
     nd.classed("highlighted", n => c.has(n.id) || n.id === d.id);
     lk.classed("highlighted", e => e._s===d.id||e._t===d.id);
@@ -571,7 +570,7 @@ async function renderStack() {
   svg.on("click", clr);
 
   // Fit to view
-  const mnX = Math.min(...N.map(n=>n.x))-20, mxX = Math.max(...N.map(n=>n.x+NW))+20;
+  const mnX = Math.min.apply(null, N.map(function(n){return n.x;}))-20, mxX = Math.max.apply(null, N.map(function(n){return n.x+NW;}))+20;
   const mnY = topY-10, mxY = botY;
   const sc = Math.min(W/(mxX-mnX), (H-80)/(mxY-mnY)) * 0.92;
   svg.call(zoom.transform, d3.zoomIdentity
